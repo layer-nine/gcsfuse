@@ -376,8 +376,9 @@ func (b *fastStatBucket) UpdateObject(
 		return
 	}
 
-	// Record the new version.
-	b.insert(o)
+	// Don't cache o: an update aimed at a superseded generation (possible on
+	// versioned buckets) returns that generation, which would shadow the live one.
+	b.invalidate(req.Name)
 
 	return
 }

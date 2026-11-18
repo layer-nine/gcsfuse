@@ -15,6 +15,7 @@
 package caching_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -146,30 +147,26 @@ func (t *IntegrationTest) ListInsertsIntoCache() {
 	ExpectNe(nil, o)
 }
 
-func (t *IntegrationTest) UpdateUpdatesCache() {
+func (t *IntegrationTest) UpdateInvalidatesCache() {
 	const name = "taco"
 	var err error
 
-	// Create an object through the back door.
-	_, err = storageutil.CreateObject(t.ctx, t.wrapped, name, []byte{})
+	// Create an object, putting it in cache.
+	_, err = storageutil.CreateObject(t.ctx, t.bucket, name, []byte{})
 	AssertEq(nil, err)
 
-	// Update it, putting the new version in cache.
-	updateReq := &gcs.UpdateObjectRequest{
-		Name: name,
-	}
-
-	_, err = t.bucket.UpdateObject(t.ctx, updateReq)
+	// Update it; the result isn't cached since it may be a superseded generation.
+	_, err = t.bucket.UpdateObject(t.ctx, &gcs.UpdateObjectRequest{Name: name})
 	AssertEq(nil, err)
 
 	// Delete the object through the back door.
 	err = t.wrapped.DeleteObject(t.ctx, &gcs.DeleteObjectRequest{Name: name})
 	AssertEq(nil, err)
 
-	// StatObject should still see it.
-	o, err := t.stat(name)
-	AssertEq(nil, err)
-	ExpectNe(nil, o)
+	// StatObject should go to the backend and not find it.
+	_, err = t.stat(name)
+	var notFoundErr *gcs.NotFoundError
+	ExpectTrue(errors.As(err, &notFoundErr))
 }
 
 func (t *IntegrationTest) PositiveCacheExpiration() {

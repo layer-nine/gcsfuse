@@ -888,9 +888,6 @@ func (t *UpdateObjectTest) WrappedSucceeds() {
 	const name = "taco"
 	var err error
 
-	// Erase
-	ExpectCall(t.cache, "Erase")(Any())
-
 	// Wrapped
 	obj := &gcs.Object{
 		Name:       name,
@@ -900,11 +897,12 @@ func (t *UpdateObjectTest) WrappedSucceeds() {
 	ExpectCall(t.wrapped, "UpdateObject")(Any(), Any()).
 		WillOnce(Return(obj, nil))
 
-	// Insert
-	ExpectCall(t.cache, "Insert")(Any(), timeutil.TimeEq(t.clock.Now().Add(primaryCacheTTL)))
+	// Erased before and after, never inserted: the returned generation may be
+	// a superseded one.
+	ExpectCall(t.cache, "Erase")(name).Times(2)
 
 	// Call
-	o, err := t.bucket.UpdateObject(context.TODO(), &gcs.UpdateObjectRequest{})
+	o, err := t.bucket.UpdateObject(context.TODO(), &gcs.UpdateObjectRequest{Name: name})
 
 	AssertEq(nil, err)
 	ExpectEq(obj, o)
